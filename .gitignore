@@ -1,0 +1,81 @@
+# Python cache / environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+.conda/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+secrets/
+secret/
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+
+# Runtime memory and evaluation data
+logs/
+*.log
+*.jsonl
+memory/player_profile.json
+memory/player_profile.json.*
+memory/exports/
+
+# Temporary files and generated output
+work/
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.wav
+*.mp3
+
+# Model files / weights
+models/
+weights/
+checkpoints/
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.gguf
+*.tflite
+
+# Third-party character and animation binaries
+*.vrm
+*.fbx
+*.glb
+*.gltf
+
+# IDE / OS
+.vscode/
+.idea/
+.vs/
+*.suo
+*.user
+*.userprefs
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Unity generated folders if a Unity project is copied here later
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+UserSettings/

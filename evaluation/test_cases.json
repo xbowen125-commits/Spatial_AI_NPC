@@ -1,0 +1,75 @@
+[
+  {
+    "id": "A",
+    "description": "正常问候",
+    "speech_text": "你好",
+    "language": "zh",
+    "world_state": {"eye_contact": "true", "looking_at_npc": "true"}
+  },
+  {
+    "id": "B",
+    "description": "玩家不存在",
+    "speech_text": "你能看到我吗？",
+    "language": "zh",
+    "world_state": {"person_detected": false, "face_detected": false, "horizontal_position": "unknown", "distance": "unknown", "eye_contact": "unknown", "looking_at_npc": "unknown", "left_hand": "unknown", "right_hand": "unknown", "directed_speech": "unknown"}
+  },
+  {
+    "id": "C",
+    "description": "未知视觉状态",
+    "speech_text": "你现在能看清我吗？",
+    "language": "zh",
+    "world_state": {"face_detected": false, "horizontal_position": "unknown", "distance": "unknown", "eye_contact": "unknown", "looking_at_npc": "unknown", "left_hand": "unknown", "right_hand": "unknown"}
+  },
+  {
+    "id": "D",
+    "description": "左手举起",
+    "speech_text": "我举的是哪只手？",
+    "language": "zh",
+    "world_state": {"left_hand": "raised", "right_hand": "down"}
+  },
+  {
+    "id": "E",
+    "description": "右手举起",
+    "speech_text": "我举的是哪只手？",
+    "language": "zh",
+    "world_state": {"left_hand": "down", "right_hand": "raised"}
+  },
+  {
+    "id": "F",
+    "description": "eye_contact=true",
+    "speech_text": "我现在在看你吗？",
+    "language": "zh",
+    "world_state": {"eye_contact": "true", "looking_at_npc": "true"}
+  },
+  {
+    "id": "G",
+    "description": "eye_contact=false",
+    "speech_text": "我现在在看你吗？",
+    "language": "zh",
+    "world_state": {"eye_contact": "false", "looking_at_npc": "false"}
+  },
+  {
+    "id": "H",
+    "description": "LLM关闭",
+    "speech_text": "你好",
+    "language": "zh",
+    "llm_enabled": false,
+    "world_state": {"eye_contact": "true", "looking_at_npc": "true"}
+  },
+  {
+    "id": "I",
+    "description": "非法action",
+    "speech_text": "你好",
+    "language": "zh",
+    "mock_output": "{\"reply\":\"你好呀。\",\"action\":\"attack\",\"emotion\":\"happy\"}",
+    "world_state": {"eye_contact": "true", "looking_at_npc": "true"}
+  },
+  {
+    "id": "J",
+    "description": "非法JSON",
+    "speech_text": "你好",
+    "language": "zh",
+    "mock_output": "this is not json",
+    "world_state": {"eye_contact": "true", "looking_at_npc": "true"}
+  }
+]
