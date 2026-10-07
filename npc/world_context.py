@@ -37,15 +37,6 @@ def build_world_context(speech_event):
     if relationship not in {"stranger", "acquaintance", "friend"}:
         relationship = "stranger"
     lines.append(f"Player relationship is {relationship}.")
-    npc_emotion = str(getattr(context, "npc_emotion", "neutral")).lower()
-    if npc_emotion not in {"neutral", "happy", "curious", "surprised"}:
-        npc_emotion = "neutral"
-    intensity = max(
-        0.0,
-        min(1.0, float(getattr(context, "npc_emotion_intensity", 0.0))),
-    )
-    lines.append(f"NPC current emotion is {npc_emotion}.")
-    lines.append(f"NPC emotion intensity is {intensity:.2f}.")
 
     return "\n".join(lines)
 

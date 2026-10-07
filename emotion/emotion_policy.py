@@ -1,44 +1,48 @@
-"""外部事件到 Emotion Stimulus 的规则与轻量Behavior调制。"""
+"""明确事件到固定 Emotion Delta 的规则。"""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+from dataclasses import replace
 
 from behavior.behavior_rules import BehaviorRules
 
 
 @dataclass(frozen=True)
-class EmotionStimulus:
-    emotion: str
-    valence: float
-    arousal: float
-    intensity: float
-    cause: str
+class EmotionDelta:
+    valence: float = 0.0
+    arousal: float = 0.0
+    social_comfort: float = 0.0
+    curiosity: float = 0.0
 
 
-WORLD_EVENT_EMOTIONS = {
-    "player_enter": EmotionStimulus(
-        "happy", 0.45, 0.35, 0.45, "player_enter"
-    ),
-    "hand_wave": EmotionStimulus(
-        "happy", 0.60, 0.50, 0.60, "hand_wave"
-    ),
-    "eye_contact_started": EmotionStimulus(
-        "curious", 0.20, 0.35, 0.35, "eye_contact_started"
-    ),
-    "eye_contact_long": EmotionStimulus(
-        "curious", 0.25, 0.45, 0.50, "eye_contact_long"
-    ),
-    "player_approach": EmotionStimulus(
-        "curious", 0.15, 0.30, 0.30, "player_approach"
-    ),
+EVENT_DELTAS = {
+    "friendly_conversation": EmotionDelta(0.10, 0.02, 0.08, 0.02),
+    "negative_interaction": EmotionDelta(-0.15, 0.10, -0.10, -0.02),
+    "eye_contact": EmotionDelta(0.00, 0.02, 0.03, 0.02),
+    "player_wave": EmotionDelta(0.05, 0.05, 0.04, 0.01),
+    "player_absent": EmotionDelta(-0.02, -0.03, -0.02, 0.00),
+    "long_idle": EmotionDelta(0.00, -0.05, 0.00, -0.02),
+}
+
+WORLD_EVENT_TO_EMOTION_EVENT = {
+    "player_enter": "friendly_conversation",
+    "player_leave": "player_absent",
+    "eye_contact_started": "eye_contact",
+    "eye_contact_long": "eye_contact",
+    "hand_wave": "player_wave",
+    "player_far": "player_absent",
 }
 
 
-def stimulus_for_world_event(event_type):
-    return WORLD_EVENT_EMOTIONS.get(str(event_type))
+def delta_for_event(event_type):
+    return EVENT_DELTAS.get(str(event_type))
+
+
+def emotion_event_for_world_event(event_type):
+    return WORLD_EVENT_TO_EMOTION_EVENT.get(str(event_type))
 
 
 class EmotionAwareBehaviorRules:
-    """只读取Emotion State；不会反向更新Emotion或创建World Event。"""
+    """只读取派生标签；不会反向更新 Emotion State。"""
 
     def __init__(self, state_provider, base_rules=None):
         self.state_provider = state_provider
@@ -50,7 +54,7 @@ class EmotionAwareBehaviorRules:
             return None
         state = self.state_provider()
         if (
-            state.emotion == "curious"
+            "curious" in state.labels()
             and world_event.event_type == "eye_contact_long"
             and decision.action == "none"
         ):

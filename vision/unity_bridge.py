@@ -120,12 +120,14 @@ def main():
     audio_controller.start()
     speech_output = SpeechOutputController()
     speech_output.start()
-    npc_agent = NpcAgent()
-    npc_agent.start()
     interaction_logger = InteractionLogger()
     behavior_logger = BehaviorLogger()
     emotion_logger = EmotionLogger()
     emotion_engine = EmotionEngine(logger=emotion_logger)
+    npc_agent = NpcAgent(
+        emotion_state_provider=lambda: emotion_engine.state,
+    )
+    npc_agent.start()
     memory_store = MemoryStore()
     event_detector = EventDetector()
     behavior_manager = BehaviorManager(

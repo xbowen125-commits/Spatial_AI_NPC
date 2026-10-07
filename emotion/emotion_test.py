@@ -1,5 +1,6 @@
-"""无需Camera、Microphone、Unity或LLM的Emotion System测试。"""
+"""连续 Dynamic Emotion State 与 Agent 独立上下文测试。"""
 
+import copy
 import json
 import sys
 import tempfile
@@ -12,167 +13,250 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from audio.speech_recognition import SpeechResult
 from emotion.emotion_engine import EmotionEngine
-from emotion.emotion_policy import (
-    EmotionAwareBehaviorRules,
-    EmotionStimulus,
-)
+from emotion.emotion_policy import EVENT_DELTAS, EmotionAwareBehaviorRules
 from emotion.emotion_state import EmotionState
 from evaluation.interaction_logger import EmotionLogger
-from events.interaction_event import InteractionEvent, NpcState
+from events.interaction_event import InteractionEvent
 from events.world_event import WorldEvent
-from memory.player_profile import PlayerProfile
-from npc.world_context import build_world_context
+from memory.memory_policy import MemoryCandidate
+from memory.memory_store import MemoryStore
+from npc.agent import NpcAgent
+from npc.conversation_context import ConversationContext
+from npc.personality import get_default_personality
 
 
 def world_event(event_type):
     return WorldEvent.create(event_type, {})
 
 
-class EmotionTests(unittest.TestCase):
-    def test_initial_state_is_neutral(self):
-        state = EmotionEngine(now=0.0).state
-        self.assertEqual(state.emotion, "neutral")
+def speech_event(text="你好", relationship_level="friend"):
+    player = SimpleNamespace(
+        person_detected=True,
+        face_detected=True,
+        horizontal_position="center",
+        distance="medium",
+        left_hand="down",
+        right_hand="down",
+        eye_contact="true",
+        looking_at_npc="true",
+        directed_speech="true",
+    )
+    return InteractionEvent.speech(
+        SpeechResult(text, "zh"),
+        player,
+        relationship_level=relationship_level,
+    )
+
+
+class FakeProvider:
+    def __init__(self):
+        self.messages = None
+
+    def generate(self, messages):
+        self.messages = list(messages)
+        return json.dumps(
+            {
+                "reply": "好的。",
+                "action": "none",
+                "emotion": "neutral",
+            },
+            ensure_ascii=False,
+        )
+
+
+class EmotionStateTests(unittest.TestCase):
+    def test_default_state_matches_baseline(self):
+        state = EmotionState()
+        self.assertEqual(state.valence, 0.20)
+        self.assertEqual(state.arousal, 0.30)
+        self.assertEqual(state.social_comfort, 0.40)
+        self.assertEqual(state.curiosity, 0.50)
         self.assertEqual(state.intensity, 0.0)
 
-    def test_player_enter_is_happy(self):
-        engine = EmotionEngine(now=0.0)
-        state = engine.process_world_event(
-            world_event("player_enter"),
-            "acquaintance",
+    def test_all_fields_are_in_valid_ranges(self):
+        state = EmotionState.create(9.0, -3.0, 4.0, -2.0)
+        self.assertTrue(-1.0 <= state.valence <= 1.0)
+        self.assertTrue(0.0 <= state.arousal <= 1.0)
+        self.assertTrue(0.0 <= state.social_comfort <= 1.0)
+        self.assertTrue(0.0 <= state.curiosity <= 1.0)
+
+    def test_friendly_conversation_delta(self):
+        state = EmotionEngine(now=0.0).apply_event(
+            "friendly_conversation",
             now=0.0,
         )
-        self.assertEqual(state.emotion, "happy")
-        self.assertAlmostEqual(state.intensity, 0.45)
+        self.assertAlmostEqual(state.valence, 0.30)
+        self.assertAlmostEqual(state.arousal, 0.32)
+        self.assertAlmostEqual(state.social_comfort, 0.48)
+        self.assertAlmostEqual(state.curiosity, 0.52)
 
-    def test_hand_wave_strengthens_happy(self):
+    def test_negative_interaction_delta(self):
+        state = EmotionEngine(now=0.0).apply_event(
+            "negative_interaction",
+            now=0.0,
+        )
+        self.assertAlmostEqual(state.valence, 0.05)
+        self.assertAlmostEqual(state.arousal, 0.40)
+        self.assertAlmostEqual(state.social_comfort, 0.30)
+        self.assertAlmostEqual(state.curiosity, 0.48)
+
+    def test_eye_contact_delta(self):
+        state = EmotionEngine(now=0.0).apply_event("eye_contact", now=0.0)
+        self.assertAlmostEqual(state.valence, 0.20)
+        self.assertAlmostEqual(state.arousal, 0.32)
+        self.assertAlmostEqual(state.social_comfort, 0.43)
+        self.assertAlmostEqual(state.curiosity, 0.52)
+
+    def test_player_wave_delta(self):
+        state = EmotionEngine(now=0.0).apply_event("player_wave", now=0.0)
+        self.assertEqual(
+            state,
+            EmotionState.create(0.25, 0.35, 0.44, 0.51),
+        )
+
+    def test_upper_clamp(self):
         engine = EmotionEngine(now=0.0)
-        first = engine.process_world_event(
-            world_event("player_enter"), "acquaintance", now=0.0
-        )
-        waved = engine.process_world_event(
-            world_event("hand_wave"), "acquaintance", now=0.1
-        )
-        self.assertEqual(waved.emotion, "happy")
-        self.assertGreater(waved.intensity, first.intensity)
+        for _ in range(30):
+            engine.apply_event("friendly_conversation", now=0.0)
+            engine.apply_event("player_wave", now=0.0)
+        self.assertEqual(engine.state.valence, 1.0)
+        self.assertEqual(engine.state.arousal, 1.0)
+        self.assertEqual(engine.state.social_comfort, 1.0)
+        self.assertEqual(engine.state.curiosity, 1.0)
 
-    def test_eye_contact_long_is_curious(self):
+    def test_lower_clamp(self):
+        state = EmotionState.create(-9.0, -3.0, -4.0, -2.0)
+        self.assertEqual(state.valence, -1.0)
+        self.assertEqual(state.arousal, 0.0)
+        self.assertEqual(state.social_comfort, 0.0)
+        self.assertEqual(state.curiosity, 0.0)
+
+    def test_decay_moves_toward_baseline(self):
+        engine = EmotionEngine(now=0.0)
+        engine.apply_event("friendly_conversation", now=0.0)
+        state = engine.decay_toward_baseline(step=0.05, now=1.0)
+        self.assertAlmostEqual(state.valence, 0.25)
+        self.assertAlmostEqual(state.arousal, 0.30)
+        self.assertAlmostEqual(state.social_comfort, 0.43)
+        self.assertAlmostEqual(state.curiosity, 0.50)
+
+    def test_decay_does_not_cross_baseline(self):
+        state = EmotionState.create(0.22, 0.28, 0.42, 0.48)
+        decayed = state.decay_toward_baseline(step=0.05)
+        self.assertEqual(decayed, EmotionState())
+
+    def test_labels_are_derived_from_continuous_values(self):
+        self.assertEqual(EmotionState().labels(), ("calm",))
+        warm = EmotionState.create(0.50, 0.30, 0.80, 0.80)
+        self.assertEqual(warm.labels(), ("calm", "warm", "curious"))
+        self.assertIn("uneasy", EmotionState.create(-0.20, 0.4, 0.2, 0.5).labels())
+        self.assertIn("excited", EmotionState.create(0.4, 0.8, 0.5, 0.5).labels())
+
+    def test_context_is_deterministic(self):
+        state = EmotionState.create(0.55, 0.30, 0.80, 0.72)
+        self.assertEqual(state.to_context(), state.to_context())
+        self.assertIn("EMOTION CONTEXT:", state.to_context())
+        self.assertIn("valence=0.55", state.to_context())
+        self.assertIn("labels=calm,warm,curious", state.to_context())
+
+    def test_repeated_events_are_predictable(self):
+        first = EmotionEngine(now=0.0)
+        second = EmotionEngine(now=0.0)
+        for _ in range(3):
+            first.apply_event("friendly_conversation", now=0.0)
+            second.apply_event("friendly_conversation", now=0.0)
+        self.assertEqual(first.state, second.state)
+        self.assertAlmostEqual(first.state.valence, 0.50)
+        self.assertAlmostEqual(first.state.arousal, 0.36)
+        self.assertAlmostEqual(first.state.social_comfort, 0.64)
+        self.assertAlmostEqual(first.state.curiosity, 0.56)
+
+    def test_all_supported_events_have_fixed_deltas(self):
+        self.assertEqual(
+            set(EVENT_DELTAS),
+            {
+                "friendly_conversation",
+                "negative_interaction",
+                "eye_contact",
+                "player_wave",
+                "player_absent",
+                "long_idle",
+            },
+        )
+
+    def test_personality_is_not_modified(self):
+        profile = get_default_personality()
+        before = copy.deepcopy(profile.to_dict())
+        EmotionEngine(now=0.0).apply_event("negative_interaction", now=0.0)
+        self.assertEqual(profile.to_dict(), before)
+
+    def test_relationship_memory_is_not_modified(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "player_profile.json"
+            store = MemoryStore(path)
+            store.remember(MemoryCandidate("interaction", "seen", timestamp=1))
+            before = path.read_bytes()
+            EmotionEngine(now=0.0).apply_event("player_wave", now=0.0)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_conversation_context_is_not_modified(self):
+        conversation = ConversationContext(session_id="emotion-test")
+        conversation.add_user_turn("你好", timestamp=1)
+        before = conversation.get_recent_context()
+        EmotionEngine(now=0.0).apply_event("eye_contact", now=0.0)
+        self.assertEqual(conversation.get_recent_context(), before)
+
+    def test_agent_receives_separate_emotion_context(self):
+        engine = EmotionEngine(now=0.0)
+        engine.apply_event("friendly_conversation", now=0.0)
+        provider = FakeProvider()
+        agent = NpcAgent(
+            provider=provider,
+            llm_enabled=True,
+            emotion_state_provider=lambda: engine.state,
+        )
+        result = agent._make_decision(speech_event())
+        self.assertEqual(result.decision.reply, "好的。")
+        emotion_messages = [
+            item for item in provider.messages
+            if item["role"] == "system"
+            and item["content"].startswith("EMOTION CONTEXT:")
+        ]
+        self.assertEqual(len(emotion_messages), 1)
+        self.assertIn("social_comfort=0.48", emotion_messages[0]["content"])
+        self.assertTrue(
+            any(
+                item["content"].startswith("PERSONALITY CONTEXT:")
+                for item in provider.messages
+                if item["role"] == "system"
+            )
+        )
+        self.assertTrue(
+            any(
+                item["content"].startswith("RELATIONSHIP BEHAVIOR CONTEXT:")
+                for item in provider.messages
+                if item["role"] == "system"
+            )
+        )
+
+    def test_new_engine_resets_to_baseline(self):
+        first = EmotionEngine(now=0.0)
+        first.apply_event("friendly_conversation", now=0.0)
+        second = EmotionEngine(now=0.0)
+        self.assertEqual(second.state, EmotionState())
+
+    def test_world_event_and_behavior_compatibility(self):
         engine = EmotionEngine(now=0.0)
         state = engine.process_world_event(
             world_event("eye_contact_long"),
-            "acquaintance",
             now=0.0,
         )
-        self.assertEqual(state.emotion, "curious")
-
-    def test_friend_slightly_increases_intensity(self):
-        friend = EmotionEngine(now=0.0).process_world_event(
-            world_event("player_enter"), "friend", now=0.0
-        )
-        stranger = EmotionEngine(now=0.0).process_world_event(
-            world_event("player_enter"), "stranger", now=0.0
-        )
-        self.assertGreater(friend.intensity, stranger.intensity)
-        self.assertAlmostEqual(friend.intensity, 0.45 * 1.15)
-
-    def test_decay_returns_to_neutral(self):
-        engine = EmotionEngine(now=0.0)
-        engine.process_world_event(
-            world_event("hand_wave"), "acquaintance", now=0.0
-        )
-        state = engine.update(now=30.0, force=True)
-        self.assertEqual(state.emotion, "neutral")
-        self.assertEqual(state.cause, "none")
-        self.assertEqual(state.intensity, 0.0)
-
-    def test_active_emotions_blend(self):
-        engine = EmotionEngine(now=0.0)
-        engine.process_world_event(
-            world_event("player_enter"), "acquaintance", now=0.0
-        )
-        state = engine.process_world_event(
-            world_event("hand_wave"), "acquaintance", now=0.0
-        )
-        self.assertAlmostEqual(state.intensity, 0.45 * 0.35 + 0.60 * 0.65)
-
-    def test_all_values_are_clamped(self):
-        engine = EmotionEngine(now=0.0)
-        state = engine.apply_stimulus(
-            EmotionStimulus("happy", 4.0, 3.0, 2.0, "test"),
-            "friend",
-            now=0.0,
-        )
-        self.assertEqual(state.valence, 1.0)
-        self.assertEqual(state.arousal, 1.0)
-        self.assertEqual(state.intensity, 1.0)
-
-    def test_new_engine_does_not_restore_old_emotion(self):
-        first = EmotionEngine(now=0.0)
-        first.process_world_event(world_event("hand_wave"), now=0.0)
-        second = EmotionEngine(now=0.0)
-        self.assertEqual(second.state.emotion, "neutral")
-
-    def test_memory_profile_has_no_emotion_fields(self):
-        fields = set(PlayerProfile().to_dict())
-        self.assertNotIn("emotion", fields)
-        self.assertNotIn("valence", fields)
-        self.assertNotIn("arousal", fields)
-        self.assertNotIn("intensity", fields)
-
-    def test_speech_only_boosts_arousal(self):
-        engine = EmotionEngine(now=0.0)
-        before = engine.state
-        after = engine.process_speech_event("friend", now=0.0)
-        self.assertEqual(after.emotion, before.emotion)
-        self.assertEqual(after.intensity, before.intensity)
-        self.assertAlmostEqual(after.arousal, before.arousal + 0.05)
-
-    def test_emotion_does_not_create_world_event(self):
-        result = EmotionEngine(now=0.0).process_world_event(
-            world_event("player_enter"), now=0.0
-        )
-        self.assertIsInstance(result, EmotionState)
-        self.assertFalse(hasattr(result, "event_type"))
-
-    def test_behavior_read_does_not_feed_back_into_emotion(self):
-        engine = EmotionEngine(now=0.0)
-        engine.process_world_event(
-            world_event("eye_contact_long"), "acquaintance", now=0.0
-        )
-        before = engine.state.to_dict()
+        self.assertIn("curious", state.labels())
         rules = EmotionAwareBehaviorRules(lambda: engine.state)
         decision = rules.decide(world_event("eye_contact_long"))
         self.assertEqual(decision.action, "look_at_player")
-        self.assertEqual(engine.state.to_dict(), before)
-
-    def test_npc_state_schema_and_agent_context(self):
-        state = NpcState.create(False, False, "happy", "idle", 0.42)
-        self.assertAlmostEqual(state.to_dict()["npc_emotion_intensity"], 0.42)
-        player = SimpleNamespace(
-            person_detected=True,
-            face_detected=True,
-            horizontal_position="center",
-            eye_contact="true",
-            looking_at_npc="true",
-            distance="medium",
-            left_hand="down",
-            right_hand="down",
-            directed_speech="true",
-        )
-        speech = SimpleNamespace(text="你好", language="zh", confidence=None)
-        event = InteractionEvent.speech(
-            speech,
-            player,
-            "friend",
-            "happy",
-            0.42,
-        )
-        context = build_world_context(event)
-        self.assertIn("NPC current emotion is happy.", context)
-        self.assertIn("NPC emotion intensity is 0.42.", context)
-        transport = event.to_dict()["context"]
-        self.assertNotIn("npc_emotion", transport)
-        self.assertNotIn("npc_emotion_intensity", transport)
 
     def test_emotion_log_contains_no_speech_text(self):
         with tempfile.TemporaryDirectory() as directory:

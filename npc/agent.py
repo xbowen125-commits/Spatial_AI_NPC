@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from audio.audio_config import RESPOND_TO_UNKNOWN_DIRECTED_SPEECH
 from behavior.relationship_behavior import build_relationship_behavior_profile
+from emotion.emotion_state import EmotionState
 
 from .action_schema import (
     AgentDecision,
@@ -47,11 +48,17 @@ class AgentLifecycle:
 class NpcAgent:
     """每个 Speech Event 只入队一次；工作线程不会阻塞视觉主循环。"""
 
-    def __init__(self, provider=None, llm_enabled=None):
+    def __init__(
+        self,
+        provider=None,
+        llm_enabled=None,
+        emotion_state_provider=None,
+    ):
         self.llm_enabled = LLM_ENABLED if llm_enabled is None else llm_enabled
         self.provider = provider
         self.personality = get_default_personality()
         self.conversation = ConversationContext()
+        self.emotion_state_provider = emotion_state_provider or EmotionState
         self.rule_engine = RuleBasedResponseEngine()
         self._jobs = queue.Queue(maxsize=AGENT_QUEUE_SIZE)
         self._events = queue.Queue()
@@ -120,6 +127,9 @@ class NpcAgent:
                 speech_event.context.relationship_level,
                 interaction_context=speech_event.context,
             )
+            emotion_state = self.emotion_state_provider()
+            if not isinstance(emotion_state, EmotionState):
+                emotion_state = EmotionState()
             messages = [
                 {"role": "system", "content": self.personality.to_context()},
                 {"role": "system", "content": AGENT_SAFETY_INSTRUCTIONS},
@@ -140,6 +150,7 @@ class NpcAgent:
                         "Use the response tone lightly; never override perception facts."
                     ),
                 },
+                {"role": "system", "content": emotion_state.to_context()},
             ]
             # 当前 user Turn 已在短期 Context 中；玩家文本绝不拼入 System Prompt。
             messages.extend(
