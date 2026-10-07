@@ -6,6 +6,7 @@ from events.world_event import PRIORITY_RANK
 
 from .behavior_rules import BehaviorRules
 from .cooldown import BEHAVIOR_STATE_COOLDOWN, CooldownTracker
+from .relationship_behavior import build_relationship_behavior_profile
 
 
 BUSY_STATES = {"listening", "thinking", "speaking", "greeting", "cooldown"}
@@ -97,6 +98,10 @@ class BehaviorManager:
         self.on_tts_finished(now)
 
     def _execute(self, event, now):
+        if not self._relationship_allows(event):
+            self._log(event, None, "relationship_blocked")
+            return None
+
         if not self.cooldowns.is_ready(event.event_type, now):
             self._log(
                 event,
@@ -123,6 +128,21 @@ class BehaviorManager:
             self._cooldown_until = now + BEHAVIOR_STATE_COOLDOWN
         self._log(event, decision, "executed")
         return decision
+
+    @staticmethod
+    def _relationship_allows(event):
+        """只在 Memory 已明确提供关系等级时限制主动社交行为。"""
+        if "relationship_level" not in event.context:
+            return True
+        profile = build_relationship_behavior_profile(
+            event.context.get("relationship_level"),
+            interaction_context=event.context,
+        )
+        if event.event_type == "player_enter":
+            return profile.allow_proactive_greeting
+        if event.event_type == "hand_wave":
+            return profile.allow_proactive_wave
+        return True
 
     def _queue_highest(self, event):
         if self._pending_event is None:
