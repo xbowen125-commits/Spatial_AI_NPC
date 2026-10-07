@@ -61,6 +61,10 @@ class BehaviorManager:
             now=now,
         )
 
+    def record_arbitration_execution(self, action, now=None):
+        """仅登记实际执行结果，供仲裁 cooldown 使用。"""
+        return self.arbitrator.record_execution(action, now)
+
     def observe_player(self, person_detected):
         self._player_present = bool(person_detected)
         if self.state == "idle" and self._player_present:

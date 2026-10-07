@@ -138,6 +138,14 @@ class BehaviorArbitrator:
             candidates=tuple(candidates),
         )
 
+    def record_execution(self, action, now=None):
+        """由执行协调层登记实际发生的离散行为。"""
+        action = str(action).strip().lower()
+        if action not in ARBITRATION_COOLDOWNS:
+            return 0.0
+        now = self.clock() if now is None else float(now)
+        return self.cooldowns.trigger(action, now)
+
     def _greet_candidate(
         self,
         visible,
@@ -160,6 +168,8 @@ class BehaviorArbitrator:
             reasons.append("player_enter_event")
         if not allowed:
             gates.append("relationship_blocks_greeting")
+        else:
+            reasons.append("relationship_allows_greeting")
         if conversation_active:
             gates.append("active_conversation")
         if busy:
@@ -197,6 +207,8 @@ class BehaviorArbitrator:
             reasons.append("player_wave_event")
         if not allowed:
             gates.append("relationship_blocks_wave")
+        else:
+            reasons.append("relationship_allows_wave")
         if conversation_active:
             gates.append("active_conversation")
         if busy:
