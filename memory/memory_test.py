@@ -20,7 +20,11 @@ from memory.memory_cli import (
     export_profile,
     show_profile,
 )
-from memory.memory_policy import MemoryCandidate, RelationshipBehaviorRules
+from memory.memory_policy import (
+    MemoryCandidate,
+    MemoryPolicy,
+    RelationshipBehaviorRules,
+)
 from memory.memory_store import MemoryStore
 from memory.player_profile import MEMORY_ALLOWLIST_FIELDS
 from npc.world_context import build_world_context
@@ -57,6 +61,33 @@ class MemoryTests(unittest.TestCase):
                 [WorldEvent.create("hand_wave", {})]
             )
         self.assertEqual(self.store.profile.times_waved, 3)
+
+    def test_candidate_events_update_expected_counters(self):
+        policy = MemoryPolicy()
+        for event in ("seen", "spoken", "wave"):
+            self.assertTrue(
+                policy.evaluate(
+                    MemoryCandidate("interaction", event)
+                ).should_save
+            )
+
+        self.store.remember(MemoryCandidate("interaction", "seen"))
+        self.store.remember(MemoryCandidate("interaction", "spoken"))
+        self.store.remember(MemoryCandidate("interaction", "wave"))
+        self.assertEqual(self.store.profile.times_seen, 1)
+        self.assertEqual(self.store.profile.times_spoken, 1)
+        self.assertEqual(self.store.profile.times_waved, 1)
+        self.assertEqual(self.store.profile.interaction_count, 1)
+
+    def test_same_world_event_is_counted_only_once(self):
+        enter = WorldEvent.create("player_enter", {}, timestamp=1000)
+        self.store.observe_world_events([enter])
+        self.store.observe_world_events([enter])
+        self.assertEqual(self.store.profile.times_seen, 1)
+
+        wave = WorldEvent.create("hand_wave", {}, timestamp=2000)
+        self.store.observe_world_events([wave, wave])
+        self.assertEqual(self.store.profile.times_waved, 1)
 
     def test_relationship_upgrade(self):
         for _ in range(2):

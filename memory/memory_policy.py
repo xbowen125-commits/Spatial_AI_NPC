@@ -17,6 +17,10 @@ FRIEND_MIN_INTERACTIONS = 10
 
 AUTO_SAVE_EVENTS = {
     "first_meeting",
+    "seen",
+    "spoken",
+    "wave",
+    # 兼容早期版本已经使用的内部事件名。
     "interaction_count",
     "times_seen",
     "player_waved",

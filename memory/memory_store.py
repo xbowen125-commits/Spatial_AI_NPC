@@ -5,6 +5,7 @@ import os
 import shutil
 import threading
 import time
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from .player_profile import PlayerProfile
 
 
 DEFAULT_PROFILE_PATH = Path(__file__).resolve().parent / "player_profile.json"
+RECENT_WORLD_EVENT_LIMIT = 256
 
 
 class MemoryStore:
@@ -25,6 +27,9 @@ class MemoryStore:
         self.path = Path(path)
         self.policy = policy or MemoryPolicy()
         self._lock = threading.Lock()
+        # 只在当前进程保留少量事件键，避免同一个事件被重复分发时重复计数。
+        # 这里不按摄像头帧计数；新的 player_enter/hand_wave 事件仍可正常累计。
+        self._recent_world_events = deque(maxlen=RECENT_WORLD_EVENT_LIMIT)
         self.profile = self._load_or_recover()
 
     def remember(self, candidate, confirmed=False):
@@ -49,16 +54,40 @@ class MemoryStore:
     def observe_world_events(self, events):
         """把 World Event 转为候选，并补充当时的关系摘要。"""
         for event in events:
+            # 使用对象身份而不是时间戳：不同事件可能在同一毫秒产生。
+            if any(item is event for item in self._recent_world_events):
+                event.context["relationship_level"] = (
+                    self.profile.relationship_level
+                )
+                continue
+            self._recent_world_events.append(event)
+
             if event.event_type == "player_enter":
                 is_first = self.profile.first_seen == 0
                 if is_first:
                     self.remember(
-                        MemoryCandidate("interaction", "first_meeting")
+                        MemoryCandidate(
+                            "interaction",
+                            "first_meeting",
+                            timestamp=event.timestamp,
+                        )
                     )
-                self.remember(MemoryCandidate("counter", "times_seen"))
+                self.remember(
+                    MemoryCandidate(
+                        "interaction",
+                        "seen",
+                        timestamp=event.timestamp,
+                    )
+                )
                 event.context["is_first_meeting"] = is_first
             elif event.event_type == "hand_wave":
-                self.remember(MemoryCandidate("counter", "player_waved"))
+                self.remember(
+                    MemoryCandidate(
+                        "interaction",
+                        "wave",
+                        timestamp=event.timestamp,
+                    )
+                )
 
             event.context["relationship_level"] = (
                 self.profile.relationship_level
@@ -67,11 +96,7 @@ class MemoryStore:
 
     def record_speech_interaction(self):
         return self.remember(
-            MemoryCandidate(
-                "interaction",
-                "interaction_count",
-                data={"spoken": True},
-            )
+            MemoryCandidate("interaction", "spoken")
         )
 
     def save_preference(self, key, value, confirmed=False):
@@ -129,13 +154,16 @@ class MemoryStore:
         if candidate.event == "first_meeting":
             if self.profile.first_seen == 0:
                 self.profile.first_seen = timestamp
-        elif candidate.event == "times_seen":
+        elif candidate.event in {"seen", "times_seen"}:
             self.profile.times_seen += 1
+        elif candidate.event == "spoken":
+            self.profile.interaction_count += 1
+            self.profile.times_spoken += 1
         elif candidate.event == "interaction_count":
             self.profile.interaction_count += 1
             if candidate.data.get("spoken") is True:
                 self.profile.times_spoken += 1
-        elif candidate.event == "player_waved":
+        elif candidate.event in {"wave", "player_waved"}:
             self.profile.times_waved += 1
         elif candidate.event == "player_preference":
             key = str(candidate.data.get("key", "")).strip()
