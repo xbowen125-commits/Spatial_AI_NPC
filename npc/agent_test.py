@@ -149,6 +149,11 @@ def run_self_test():
     assert phases == ["started", "completed"]
     assert provider.messages[-1] == {"role": "user", "content": "你好"}
     assert any(
+        "PERSONALITY CONTEXT" in item["content"]
+        for item in provider.messages
+        if item["role"] == "system"
+    )
+    assert any(
         "AUTHORITATIVE PERCEPTION CONTEXT" in item["content"]
         for item in provider.messages
         if item["role"] == "system"

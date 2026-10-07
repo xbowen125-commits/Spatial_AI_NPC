@@ -22,7 +22,7 @@ from .agent_config import (
 )
 from .conversation_context import ConversationContext
 from .llm_provider import OpenAICompatibleProvider
-from .personality import get_default_personality
+from .personality import AGENT_SAFETY_INSTRUCTIONS, get_default_personality
 from .response_engine import RuleBasedResponseEngine
 from .world_context import build_world_context
 
@@ -121,7 +121,8 @@ class NpcAgent:
                 interaction_context=speech_event.context,
             )
             messages = [
-                {"role": "system", "content": self.personality.system_prompt()},
+                {"role": "system", "content": self.personality.to_context()},
+                {"role": "system", "content": AGENT_SAFETY_INSTRUCTIONS},
                 {
                     "role": "system",
                     "content": (
