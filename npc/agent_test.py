@@ -28,6 +28,7 @@ def make_event(
     eye_contact="true",
     directed_speech="true",
     language="zh",
+    relationship_level="stranger",
 ):
     state = SimpleNamespace(
         person_detected=person_detected,
@@ -40,7 +41,11 @@ def make_event(
         looking_at_npc="true" if eye_contact == "true" else "unknown",
         directed_speech=directed_speech,
     )
-    return InteractionEvent.speech(SpeechResult(text, language), state)
+    return InteractionEvent.speech(
+        SpeechResult(text, language),
+        state,
+        relationship_level=relationship_level,
+    )
 
 
 def run_self_test():
@@ -114,8 +119,8 @@ def run_self_test():
     memory = ConversationContext(max_turns=6)
     for index in range(7):
         memory.add_turn(f"u{index}", f"a{index}")
-    assert len(memory.messages()) == 12
-    assert memory.messages()[0]["content"] == "u1"
+    assert len(memory.messages()) == 6
+    assert memory.messages()[0]["content"] == "u4"
 
     class CountingProvider:
         def __init__(self):
@@ -143,7 +148,16 @@ def run_self_test():
     assert provider.calls == 1
     assert phases == ["started", "completed"]
     assert provider.messages[-1] == {"role": "user", "content": "你好"}
-    assert "AUTHORITATIVE PERCEPTION CONTEXT" in provider.messages[1]["content"]
+    assert any(
+        "AUTHORITATIVE PERCEPTION CONTEXT" in item["content"]
+        for item in provider.messages
+        if item["role"] == "system"
+    )
+    assert any(
+        "response_tone=polite" in item["content"]
+        for item in provider.messages
+        if item["role"] == "system"
+    )
 
     blocked_provider = CountingProvider()
     blocked = NpcAgent(provider=blocked_provider, llm_enabled=True)

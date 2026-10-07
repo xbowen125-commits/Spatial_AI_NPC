@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 
 from audio.audio_config import RESPOND_TO_UNKNOWN_DIRECTED_SPEECH
+from behavior.relationship_behavior import build_relationship_behavior_profile
 
 from .action_schema import (
     AgentDecision,
@@ -79,6 +80,7 @@ class NpcAgent:
             self._jobs.put_nowait(speech_event)
             return True
         except queue.Full:
+            self.conversation.add_user_turn(speech_event.text)
             result = self._fallback(speech_event, "Agent queue is full")
             self._events.put(AgentLifecycle("completed", speech_event, result))
             return True
@@ -107,12 +109,17 @@ class NpcAgent:
     def _make_decision(self, speech_event):
         started = time.monotonic()
         action_error_count = 0
+        self.conversation.add_user_turn(speech_event.text)
         if not self.llm_enabled:
             return self._fallback(speech_event, "LLM disabled", started)
 
         try:
             provider = self.provider or self._create_provider()
             world_context = build_world_context(speech_event)
+            relationship_profile = build_relationship_behavior_profile(
+                speech_event.context.relationship_level,
+                interaction_context=speech_event.context,
+            )
             messages = [
                 {"role": "system", "content": self.personality.system_prompt()},
                 {
@@ -123,17 +130,31 @@ class NpcAgent:
                         + "\nNever contradict these facts."
                     ),
                 },
+                {
+                    "role": "system",
+                    "content": (
+                        "RELATIONSHIP BEHAVIOR CONTEXT:\n"
+                        f"relationship_level={relationship_profile.relationship_level}\n"
+                        f"response_tone={relationship_profile.response_tone}\n"
+                        "Use the response tone lightly; never override perception facts."
+                    ),
+                },
             ]
-            messages.extend(self.conversation.messages())
-            # 玩家文本始终是 user message，绝不拼入 System Prompt。
-            messages.append({"role": "user", "content": speech_event.text})
+            # 当前 user Turn 已在短期 Context 中；玩家文本绝不拼入 System Prompt。
+            messages.extend(
+                {
+                    "role": turn["role"],
+                    "content": turn["content"],
+                }
+                for turn in self.conversation.get_recent_context()
+            )
             raw_output = provider.generate(messages)
             parsed = parse_agent_output_detailed(raw_output)
             action_error_count = parsed.action_error_count
             decision = parsed.decision
             decision = enforce_perception_constraints(decision, speech_event)
             latency = int((time.monotonic() - started) * 1000)
-            self.conversation.add_turn(speech_event.text, decision.reply)
+            self.conversation.add_assistant_turn(decision.reply)
             self._debug_log(speech_event, world_context, decision, latency)
             return AgentResult(
                 speech_event,
@@ -170,7 +191,7 @@ class NpcAgent:
                 emotion="neutral",
                 source="rule",
             )
-            self.conversation.add_turn(speech_event.text, decision.reply)
+            self.conversation.add_assistant_turn(decision.reply)
         latency = int((time.monotonic() - started) * 1000)
         print(f"Agent fallback: {reason}")
         return AgentResult(
@@ -210,3 +231,4 @@ class NpcAgent:
             except queue.Full:
                 pass
             self._worker.join(timeout=2.0)
+        self.conversation.clear()
