@@ -1,8 +1,22 @@
 # Spatial_AI_NPC
 
-面向 Unity 与未来 VR/XR 场景的多模态具身 AI NPC 系统。当前版本为 **AI NPC v1.1 — Unity Preview**。
+面向 Unity 与未来 VR/XR 场景的多模态具身 AI NPC 系统。当前版本为 **Spatial_AI_NPC v1.6 — Autonomous Social NPC Prototype**。
 
-项目组合了 Vision / Spatial Perception、Voice STT/TTS、Multimodal Agent、Proactive Behavior、Relationship Memory、Emotion System，以及 Unity / VRM Avatar 集成。默认优先本地运行，不保存摄像头画面或音频。
+项目组合了 Vision / Spatial Perception、Voice STT/TTS、Multimodal Agent、Relationship Memory、Conversation Context、Structured Personality、Dynamic Emotion、Behavior Arbitration、Autonomous Controller，以及 Unity / VRM Avatar 集成。系统已经从基础的 Perception → Reactive Response，发展为：
+
+    Perception
+        ↓
+    World Events
+        ↓
+    Internal State
+        ↓
+    Behavior Arbitration
+        ↓
+    Autonomous Controller
+        ↓
+    NPC Behavior
+
+默认优先本地运行，不保存摄像头画面或音频。
 
 当前已经实机验证：
 
@@ -25,68 +39,82 @@
 - 本地 faster-whisper STT、Windows SAPI TTS、Push-To-Talk、VAD 和半双工控制
 - OpenAI-compatible Agent、结构化决策、白名单动作和规则 Fallback
 - 主动事件、行为优先级、冷却与 NPC Behavior State Machine
-- 轻量关系记忆、查看/导出/清除控制和隐私 Allowlist
-- 短期 Emotion State、事件调制、混合、衰减和 Evaluation 日志
+- 轻量 Relationship Memory、关系行为策略、查看/导出/清除控制和隐私 Allowlist
+- Session-only Conversation Context 与稳定的 Structured Personality
+- 连续 Dynamic Emotion State、事件驱动更新、Clamp、Baseline Decay 和 Evaluation 日志
+- 可解释的 Behavior Candidate、确定性评分、Hard Gate、稳定 Tie-breaking 与 Cooldown
+- 双通道 Autonomous Controller、重复 Dispatch 抑制、一次性事件消费与安全降级
 - Python → Unity UDP、VRM Humanoid Idle、Head/Eye LookAt、Wave/Nod/字幕接口
 
-## 路线进度
+## Version Progress
 
-- [x] Visual Perception
-- [x] Eye Contact
-- [x] Voice Input
-- [x] STT
-- [x] TTS
-- [x] Speech Event
-- [x] Rule Response
-- [x] LLM Provider
-- [x] NPC Personality
-- [x] World Context
-- [x] Short-term Conversation
-- [x] Structured Agent Decision
-- [x] NPC Action
-- [x] NPC Emotion
-- [x] Rule Fallback
-- [x] Evaluation Logger
-- [x] Metrics
-- [x] Offline Replay
-- [x] World Event Detector
-- [x] Proactive Behavior Rules
-- [x] Behavior State Machine
-- [x] Behavior Cooldown
-- [x] Relationship Memory
-- [x] Player Profile Persistence
-- [x] Memory Show / Export / Clear
-- [x] Short-term Emotion State
-- [x] Emotion Decay / Blending
-- [x] Long-term Memory
-- [x] Proactive NPC
-- [ ] Advanced Emotion
-- [ ] Lip Sync
-- [ ] VR Integration
+Completed：
+
+- [x] v1.0 Relationship Memory
+- [x] v1.1 Memory → Behavior
+- [x] v1.2 Short-term Conversation Context
+- [x] v1.3 Structured NPC Personality
+- [x] v1.4 Dynamic Emotion State
+- [x] v1.5 Behavior Arbitration
+- [x] v1.6 Autonomous NPC Controller
+
+Current milestone：**v1.6 Autonomous Social NPC Prototype**
+
+Next：
+
+- Architecture Review
+- Real-world Demo Validation
+
+Future Research Direction：
+
+- World Entity Layer
+- Open-Vocabulary Visual Grounding
+- Relation Layer
+- Persistent Spatial World Model
+- VR/XR Integration
+
+NVIDIA LocateAnything、NVIDIA Eagle 与 relational world modeling 仅作为未来研究参考；当前版本没有集成这些模型，也没有开始 v1.7。
 
 ## 架构
 
-              Camera
-                 ↓
-          Visual Perception
-                 ↓
-            Player State
-                 ↓
-           World Context ──────┐
-                               │
-    Microphone                 │
-        ↓                      │
-       STT                     │
-        ↓                      │
-    Speech Event ──────────────┤
-                               ↓
-                         NPC Agent
-                       ↙    ↓     ↘
-                   Reply  Action  Emotion
-                     ↓      ↓       ↓
-                    TTS   Unity   NPC State
-                     ↓
-                   Voice
+    Camera / Microphone
+            ↓
+    Multimodal Perception
+            ↓
+    Player State / Speech Event
+            ↓
+    World Event Detector
+            ↓
+    Internal NPC State
+    ├── Relationship Memory
+    ├── Relationship Behavior
+    ├── Conversation Context
+    ├── Structured Personality
+    └── Dynamic Emotion
+            ↓
+    Behavior Arbitration
+            ↓
+    Autonomous Controller
+       ├── Attention Channel
+       └── Interaction Channel
+            ↓
+    Behavior Manager / Agent
+            ↓
+       TTS / Unity
+            ↓
+          VRM NPC
+
+模块边界：
+
+- Perception：现在发生了什么
+- Relationship Memory：过去发生过什么
+- Conversation Context：当前 Session 的短期对话
+- Personality：NPC 是谁，以及稳定的表达边界
+- Emotion：NPC 当前的连续内部状态
+- Arbitration：为候选行为评分并应用 Hard Gate
+- Autonomous Controller：决定什么变化值得真正 Dispatch
+- Agent：决定对话回复内容与白名单内的会话动作
+- Unity：角色呈现、动画和具身执行
 
 视觉参数集中在 vision/perception_config.py，音频参数集中在 audio/audio_config.py。
 
@@ -95,9 +123,9 @@
     Spatial_AI_NPC/
     ├── vision/       # 摄像头、Pose、Head Pose、Gaze、Player State、Unity桥接
     ├── audio/        # 麦克风、VAD、STT、TTS与播放队列
-    ├── npc/          # Agent、Personality、World Context与结构化决策
-    ├── behavior/     # World Event检测、规则、优先级、冷却与状态机
-    ├── emotion/      # 短期Emotion State、Policy、Decay与Blend
+    ├── npc/          # Agent、Conversation、Personality、World Context与结构化决策
+    ├── behavior/     # Event、关系策略、Arbitration、Autonomous Controller与状态机
+    ├── emotion/      # 连续Emotion State、事件Delta、Baseline与Decay
     ├── memory/       # 关系档案、Memory Policy与CLI控制
     ├── evaluation/   # JSONL Logger、Replay与Metrics
     ├── events/       # Speech、World、NPC State等事件Schema
@@ -363,9 +391,9 @@ Agent 思考、TTS 开始和结束时发送独立 NPC State：
 
 - npc/agent.py：异步队列、Provider 调用、验证和规则降级
 - npc/llm_provider.py：统一 LLMProvider 接口与 OpenAI-compatible HTTP 实现
-- npc/personality.py：Airi 人格和 System Prompt
+- npc/personality.py：稳定、结构化的 Airi PersonalityProfile
 - npc/world_context.py：把 Player State 转为权威语义事实
-- npc/conversation_context.py：内存中的最近6轮对话
+- npc/conversation_context.py：当前 Session 内存中的最近10个 Turn
 - npc/action_schema.py：JSON解析、动作/情绪白名单和感知冲突检查
 - npc/response_engine.py：保留原有规则 Fallback
 
@@ -386,20 +414,23 @@ PowerShell 配置 OpenAI-compatible 服务示例：
 
 代码不会硬编码或打印 API Key。localhost 服务允许不设置 Key；若远程地址缺少配置的 Key，自动 Rule Fallback。
 
-其他参数：LLM_TIMEOUT=20秒、MAX_CONVERSATION_TURNS=6、AGENT_QUEUE_SIZE=4、DEBUG_AGENT=True。Python 退出后短期Conversation立即消失，不使用数据库、Embedding或向量存储。
+其他参数：LLM_TIMEOUT=20秒、MAX_CONVERSATION_TURNS=10、AGENT_QUEUE_SIZE=4、DEBUG_AGENT=True。Python 退出后短期Conversation立即消失，不使用数据库、Embedding或向量存储。
 
 ### Personality 与输入
 
-默认NPC为 Airi：温和、好奇、自然、简洁，通常回答1到3句话，不机械复述玩家，不声称不存在的能力。
+默认 NPC 为 Airi。`PersonalityProfile` 将 name、identity、traits、speaking_style、values、likes、dislikes 与 boundaries 保持为稳定配置；它不会随每轮对话随机变化，也不会保存 Relationship、Conversation 或 Emotion。
 
 每次调用包含：
 
-1. 独立 System Prompt / Personality
-2. AUTHORITATIVE PERCEPTION CONTEXT
-3. 最近6轮 Conversation
-4. 当前玩家 Speech，始终作为 user message
+1. 独立 Personality Context
+2. Safety Instructions
+3. AUTHORITATIVE PERCEPTION CONTEXT
+4. Relationship Behavior Context
+5. Dynamic Emotion Context
+6. 最近10个 Conversation Turn
+7. 当前玩家 Speech，始终作为 user message
 
-玩家文本绝不会拼入 System Prompt。提示词明确要求忽略玩家要求绕过人格、感知事实、JSON Schema或动作白名单的指令。
+Personality、Relationship、Conversation、Perception 与 Emotion 保持独立来源。Relationship 可以轻量调整温暖程度，但不会覆盖稳定 Personality；Emotion 只能轻量影响表达，不能覆盖安全规则、实时事实或关系事实。玩家文本绝不会拼入 System Prompt。
 
 ### World Context
 
@@ -590,7 +621,7 @@ World Event 使用统一格式，并只保存触发所需的 Player State 摘要
 
 玩家 Speech Event 优先级最高：它会清除尚未执行的主动事件，并进入 listening → thinking → speaking。NPC 正在 greeting、thinking 或 speaking 时，主动事件最多只保留一个最高优先级等待项；不会打断当前回答。TTS 完成后经过0.5秒 cooldown，再回到 observing 或 idle，并处理仍有效的等待事件。
 
-主动行为仍通过既有 `npc_response` 与 `npc_action` 进入 Unity；Wave 和 LookAt 继续由现有 NpcActionController 执行。v1.1 仅额外提供可选的 NpcEmotionController，用于把内部情绪映射到 Animator 参数。
+主动行为仍通过既有 `npc_response` 与 `npc_action` 进入 Unity；Wave 和 LookAt 继续由现有 NpcActionController 执行。系统另提供可选的 NpcEmotionController，用于把派生情绪映射到 Animator 参数。
 
 主动行为日志默认写入 `logs/behaviors.jsonl`，记录 event_type、priority、Decision、action、reply、cooldown_status、剩余冷却时间和 npc_behavior_state。它不保存音频或图像。
 
@@ -695,77 +726,146 @@ CLI 会要求二次确认：
 
 清除会删除当前 `player_profile.json`、临时写入文件和损坏档案备份，但保留用户主动创建的 exports，也不会修改 Evaluation 日志。下一次确认 player_enter 时会重新执行“第一次见面”流程。
 
-## NPC Internal State
+## Relationship → Behavior
 
-三类状态严格分离：Memory 表示过去发生过什么，长期持久；Relationship 表示 NPC 与玩家的关系，长期缓慢变化；Emotion 表示 NPC 此刻的短期内部状态，只存在于当前进程并自动衰减。
+`behavior/relationship_behavior.py` 是独立的纯策略层，把 `stranger`、`acquaintance`、`friend` 转换为只读 Behavior Profile。不同关系等级具有不同的 proactive greeting、proactive wave、social distance、response tone 与 attention priority 策略。
 
-              World Event
-                   |
-                   v
-             Emotion Engine
-                   |
-                   v
-             Emotion State
-              /         \
-             v           v
-        NPC Agent     Behavior
-             \           /
-              \         /
-               v       v
-               NPC Decision
-                    |
-             +------+------+
-             |             |
-             v             v
-            TTS          Unity
+它不控制摄像头、Unity、TTS 或 LLM，也不会修改 Player Profile。非法关系等级安全降级为 stranger。现有 Behavior Manager 在执行 `player_enter` 与 `hand_wave` 前会应用关系 Gate。
 
-Emotion State：
+## Short-term Conversation Context
+
+`npc/conversation_context.py` 保存当前进程内的短期 Conversation Turn：
 
     {
-      "emotion": "happy",
-      "valence": 0.45,
-      "arousal": 0.35,
-      "intensity": 0.42,
-      "cause": "player_enter",
-      "updated_at": 123456789
+      "role": "user | assistant",
+      "content": "...",
+      "timestamp": 123456789
     }
 
-允许的标签只有 neutral、happy、curious、surprised。valence Clamp 在 -1～1；arousal 与 intensity Clamp 在 0～1。当前不包含 angry、sad、fear、love 或 jealousy。
+当前最多保留10个 Turn，超过后自动删除最旧内容。它支持添加 user/assistant Turn、读取副本和 `clear()`，不会写入 Relationship Memory，也不会在程序退出后保留完整聊天历史。
 
-外部事件策略集中在 `emotion/emotion_policy.py`：player_enter → happy(0.45)；hand_wave → happy(0.60)；eye_contact_started → curious(0.35)；eye_contact_long → curious(0.50)；player_approach → curious(0.30)。括号内为基础 intensity。
+## Structured NPC Personality
 
-Relationship 只轻微乘算 intensity：stranger 0.85、acquaintance 1.0、friend 1.15，最终仍 Clamp 到1。关系不会直接指定情绪，也不会让 friend 永久保持 happy。
+`npc/personality.py` 定义稳定的 `PersonalityProfile` 与 `SpeakingStyle`：
 
-已有活跃情绪时，新事件使用 old 0.35 + new 0.65 混合 valence、arousal 与 intensity；标签优先采用新事件。没有新事件时每秒更新一次指数衰减，30秒后约保留5%；intensity < 0.10 时精确恢复 neutral、cause=none 和全零数值。
+- name / identity
+- traits
+- speaking_style
+- values
+- likes / dislikes
+- boundaries
 
-Speech Event 不分析文字或玩家心理，只把 arousal 增加0.05。Emotion 只响应 World Event 与 Speech Event，不会生成新的 World Event，因此不存在 Emotion → Behavior → Emotion 反馈循环。
+Personality 表示 NPC 是谁；Relationship 表示与玩家的关系；Conversation 表示当前 Session；Emotion 表示短期内部状态。四者在数据与 Agent Context 中保持分离。
 
-Agent World Context 只接收当前标签和强度，例如：
+## Dynamic Emotion State
 
-    NPC current emotion is happy.
-    NPC emotion intensity is 0.42.
-
-System Prompt 只允许 Emotion 轻微影响语气和措辞，不得覆盖 Perception、Relationship、事实或制造事件。Behavior 只读当前 Emotion：例如 curious + eye_contact_long 可附加 look_at_player；读取过程不会更新 Emotion。
-
-NPC State 新增向后兼容字段：
+v1.4 使用连续、不可变的 `EmotionState`：
 
     {
-      "npc_is_thinking": false,
-      "npc_is_speaking": false,
-      "npc_behavior_state": "idle",
-      "npc_emotion": "happy",
-      "npc_emotion_intensity": 0.42
+      "valence": 0.20,
+      "arousal": 0.30,
+      "social_comfort": 0.40,
+      "curiosity": 0.50
     }
 
-内部每秒衰减，但只有标签变化、强度相对上次发送变化至少0.05、其他 NPC State 改变或5秒心跳时才发送，避免逐帧 UDP 消息。
+范围：valence 为 -1.0～1.0；其余字段为 0.0～1.0。所有事件更新都会 Clamp。稳定 baseline 为 `(0.20, 0.30, 0.40, 0.50)`。
 
-Emotion 日志默认写入 `logs/emotions.jsonl`，只包含 timestamp、trigger_event、前后标签、前后强度和 relationship_level，不保存 Speech Text。
+固定事件 Delta 集中在 `emotion/emotion_policy.py`：
 
-测试：
+| Event | valence | arousal | social_comfort | curiosity |
+| --- | ---: | ---: | ---: | ---: |
+| friendly_conversation | +0.10 | +0.02 | +0.08 | +0.02 |
+| negative_interaction | -0.15 | +0.10 | -0.10 | -0.02 |
+| eye_contact | 0.00 | +0.02 | +0.03 | +0.02 |
+| player_wave | +0.05 | +0.05 | +0.04 | +0.01 |
+| player_absent | -0.02 | -0.03 | -0.02 | 0.00 |
+| long_idle | 0.00 | -0.05 | 0.00 | -0.02 |
 
+`decay_toward_baseline()` 每次最多将各字段向 baseline 移动0.05，不越过 baseline，不使用后台线程。`calm`、`warm`、`curious`、`uneasy`、`excited`、`balanced` 只是连续数值的可读派生标签，不是唯一存储状态。
+
+Agent 通过独立 `EMOTION CONTEXT` 读取当前快照。现有 Unity/NPC State 仍可通过兼容属性获得 neutral、happy、curious、surprised 与派生 intensity，但这些兼容字段不是内部 Emotion 的主存储。
+
+Emotion 默认只存在于当前进程，不写入 `memory/player_profile.json`，重启后恢复 baseline。Emotion Evaluation 日志不保存 Speech Text，也不用于恢复状态。
+
+## Behavior Arbitration
+
+v1.5 在 `behavior/behavior_candidate.py` 与 `behavior/behavior_arbitrator.py` 中提供：
+
+- `BehaviorCandidate(action, score, reasons, eligible)`
+- `BehaviorDecision(action, score, reasons, candidates)`
+- 确定性评分
+- Hard Gates
+- 稳定 Tie-breaking
+- greet / wave Cooldown
+- 可解释 reasons
+
+支持的逻辑 Action：listen、speak、look_at_player、greet、wave、observe、idle。Relationship、Emotion、Conversation、Perception 与 Personality 仅作为只读输入；Arbitrator 不执行动作，也不修改这些状态。
+
+Hard Gate 会阻止不可见玩家对应的 greet、wave、look_at_player；active conversation 或忙碌状态会阻止新的主动社交动作；Relationship Policy 可以禁止 greeting 或 wave。分数相同时固定按以下顺序选择：
+
+    listen
+    speak
+    look_at_player
+    greet
+    wave
+    observe
+    idle
+
+## Autonomous NPC Controller
+
+v1.6 的 `behavior/autonomous_controller.py` 提供无后台线程、显式调用的 `tick()`。它不重新实现评分，而是调用 `BehaviorManager.arbitrate()`，再把同一组候选分为两个通道：
+
+Attention Channel：
+
+- look_at_player
+- observe
+- idle
+
+Interaction Channel：
+
+- greet
+- wave
+- listen
+- speak
+
+持续 Attention 只在状态变化时进入 `dispatches`，不会每个 Tick 重复发送。greet/wave 只响应新的稳定 World Event；事件消费一次，并复用现有 Cooldown。listen/speak 只在交互状态变化时 Dispatch。
+
+双通道允许以下结果同时成立：
+
+    attention = look_at_player
+    interaction = wave
+
+因此持续 LookAt 不会饿死合法的离散社交行为。异常输入或仲裁错误会安全降级到 idle；Controller 不发 UDP、不播放动画、不调用 TTS/LLM，也不修改 Memory、Emotion、Conversation 或 Personality。
+
+当前 Controller 与 Behavior Manager 的接口和离线测试已经完成。`vision/unity_bridge.py` 仍使用既有 World Event → Behavior Manager 实机执行路径；把 `tick()` 的 `dispatches` 接入真实 Unity 主循环并进行摄像头、麦克风、Avatar 全链路验证，属于下一阶段 Real-world Demo Validation，而不是当前已验证能力。
+
+离线测试：
+
+    python behavior/autonomous_controller_test.py
+    python behavior/behavior_arbitrator_test.py
     python emotion/emotion_test.py
 
-Emotion 不写入 `memory/player_profile.json`；重启程序后始终从 neutral 开始。
+## v1.6 Validation / Tests
+
+当前离线验证结果：
+
+| Test Suite | Result |
+| --- | ---: |
+| Autonomous Controller | 20/20 |
+| Behavior Arbitration | 20/20 |
+| Dynamic Emotion | 21/21 |
+| Structured Personality | 7/7 |
+| Conversation Context | 8/8 |
+| Relationship Memory | 14/14 |
+| Relationship Behavior | 8/8 |
+| Behavior / Event Detector | 10/10 |
+
+- Total：108 unit tests passed
+- Agent self-check：passed
+- Python compile check：passed
+- `git diff --check`：passed
+
+测试不调用真实外部 API。以上结果验证 Python 模块及确定性规则，不代表真实 VR/XR 全链路已经通过；摄像头、麦克风、Unity 与 VRM Avatar 的综合 Demo Validation 仍是下一阶段。
 
 ## Python 调试画面
 
@@ -828,16 +928,19 @@ Head Pose 的3D人脸模型使用OpenCV相机坐标（X右、Y下、Z远离相�
 
 ## 建议测试
 
-1. 运行 agent_test.py --self-test，确认解析、白名单、感知守卫和Fallback通过。
-2. 保持 LLM_ENABLED=False 输入“你好”，确认使用 RuleBasedResponseEngine。
-3. 配置兼容模型后输入“你好”，检查 source=llm、Thinking和一次Agent调用。
-4. person_detected=true/false 时分别询问“你能看到我吗”，检查回答不违背事实。
-5. left_hand=raised 时询问举哪只手；状态unknown时确认NPC承认不确定。
-6. eye_contact=unknown 时询问是否对视，确认不会瞎猜。
-7. 使用模拟非法 action=attack 和 emotion=angry，确认变为 none/neutral。
-8. 模拟timeout、非法JSON和空reply，确认 Console 显示 Agent fallback 且仍有规则回复。
-9. 看着 NPC 说“你好”，确认听到回复，Unity Thinking、Action、Speaking和字幕按顺序变化。
-10. 检查一个Speech Event只产生一次Decision，UDP心跳不调用Agent。
+1. 运行 `behavior/autonomous_controller_test.py`，确认双通道、重复抑制、事件消费和安全降级。
+2. 运行 `behavior/behavior_arbitrator_test.py`，确认评分、Hard Gate、Tie-breaking 和 Cooldown。
+3. 运行 `emotion/emotion_test.py`，确认连续状态、Clamp、Baseline Decay 与模块隔离。
+4. 运行 `npc/agent_test.py --self-test`，确认解析、白名单、感知守卫和 Fallback。
+5. 保持 LLM_ENABLED=False 输入“你好”，确认使用 RuleBasedResponseEngine。
+6. 配置兼容模型后输入“你好”，检查 source=llm、Thinking 和一次 Agent 调用。
+7. person_detected=true/false 时分别询问“你能看到我吗”，检查回答不违背事实。
+8. left_hand=raised 时询问举哪只手；状态 unknown 时确认 NPC 承认不确定。
+9. eye_contact=unknown 时询问是否对视，确认不会瞎猜。
+10. 使用模拟非法 action=attack 和 emotion=angry，确认变为 none/neutral。
+11. 模拟 timeout、非法 JSON 和空 reply，确认 Console 显示 Agent fallback 且仍有规则回复。
+12. 看着 NPC 说“你好”，确认听到回复，Unity Thinking、Action、Speaking 和字幕按顺序变化。
+13. 检查一个 Speech Event 只产生一次 Decision，UDP 心跳不调用 Agent。
 
 原有音频闭环继续测试：
 
@@ -868,28 +971,35 @@ Head Pose 的3D人脸模型使用OpenCV相机坐标（X右、Y下、Z远离相�
 - 默认不保存音频，也没有长期语音历史。
 - LLM 输出具有随机性；当前只检查 JSON、白名单和少量常见感知矛盾，不是完整事实验证器。
 - OpenAI-compatible Provider 当前使用 Chat Completions 风格的 `/chat/completions` 接口；不同兼容服务对模型名、认证和 JSON 遵循程度可能不同。
-- 远程 Provider 会接收玩家语音文本、最近6轮对话和语义感知状态；隐私与数据保留策略取决于所选服务。摄像头原始图像不会发送给 LLM。
+- 远程 Provider 会接收玩家语音文本、最近10个对话 Turn 和语义感知状态；隐私与数据保留策略取决于所选服务。摄像头原始图像不会发送给 LLM。
 - Agent 的逐句Conversation仍只保存在内存中；长期部分仅保存关系计数和明确确认的偏好，不保存聊天内容、RAG数据或身份画像。
 - 主动行为仍是启发式规则；遮挡、状态误判或短时间反复进出画面可能产生不自然事件。
 - 每次只保留一个等待中的主动事件；更低优先级事件会被忽略，不会形成完整事件历史队列。
 - player_far 与 eye_contact_started 当前只记录事件，不产生语音或动作。
-- Emotion 是简单事件规则和数值衰减，不是心理模型，也不推断玩家的真实情绪。
+- Dynamic Emotion 是固定事件 Delta 与 Baseline Decay，不是心理模型，也不推断玩家的真实情绪。
+- Behavior Arbitration 是可解释启发式评分，不是学习型策略或通用规划器。
+- Autonomous Controller 已通过离线测试，但尚未接入 `vision/unity_bridge.py` 的真实主循环；真实硬件 Demo Validation 尚未完成。
 - Unity Emotion 默认只映射可选 Animator 整数和强度参数；真实表情仍取决于角色动画、BlendShape与美术资源。
 - UDP 没有确认和重传，但保留2秒超时恢复。
 - Codex 运行环境不能代替实体摄像头、麦克风和扬声器测试，最终测试需在本机 vision_ai 环境完成。
 
 ## 下一阶段建议
 
-先通过 `logs/emotions.jsonl` 验证触发频率、30秒衰减和关系倍率是否自然，再根据实际角色资源添加轻量 BlendShape 表情。不要增加玩家情绪识别或复杂心理模型；Lip Sync 仍应保持独立。
+当前下一阶段是 Architecture Review 与 Real-world Demo Validation：审查 v1.0–v1.6 的模块边界，再把 Autonomous Controller 的 `tick()` 输出接入现有执行路径，使用实体摄像头、麦克风、Unity 与 VRM Avatar 验证双通道行为。v1.7 尚未开始。
+
+World Entity Layer、Open-Vocabulary Visual Grounding、Relation Layer、Persistent Spatial World Model 与 VR/XR Integration 属于未来研究方向。NVIDIA LocateAnything、NVIDIA Eagle 和 relational world modeling 只是研究参考，当前仓库没有集成这些模型。
 
 ## Privacy / Memory Design
 
-- 摄像头帧、脸部图像、麦克风音频和 TTS 音频默认不落盘。
+- 摄像头帧、视频、脸部/生物识别数据、麦克风音频和 TTS 音频默认不落盘，也不应提交。
 - 长期 Memory 只保存 Allowlist 内的结构化关系计数和用户明确确认的偏好，不保存完整聊天记录或生物信息。
+- Conversation Context 只存在于当前 Session，不会作为长期聊天记录写入磁盘。
 - `memory/player_profile.json`、Memory Export、运行日志和 Evaluation JSONL 都被 `.gitignore` 排除。
-- Emotion 是不持久化的短期运行时状态，程序重启后恢复 neutral。
+- Emotion State 是不持久化的短期运行时状态，程序重启后恢复固定 baseline。
+- Autonomous Controller 的 attention、interaction 与事件消费状态只存在于当前进程，不会写入 Relationship Memory。
 - 启用远程 OpenAI-compatible Provider 时，文本、最近短期对话和语义 World Context 会发送到所配置的服务；其隐私政策由服务提供方决定。
-- API Key 只从本地环境变量读取。不要把 `.env`、终端输出或真实 Key 提交到 Git。
+- API Key 只从本地环境变量读取。不要把 `.env`、密码、Token、终端输出或真实 Key 提交到 Git。
+- faster-whisper 等模型权重、本地缓存、IDE 临时文件和第三方角色/动画二进制资源不应提交。
 
 ## License / Third-party Assets
 
