@@ -4,6 +4,7 @@ import time
 
 from events.world_event import PRIORITY_RANK
 
+from .behavior_arbitrator import BehaviorArbitrator
 from .behavior_rules import BehaviorRules
 from .cooldown import BEHAVIOR_STATE_COOLDOWN, CooldownTracker
 from .relationship_behavior import build_relationship_behavior_profile
@@ -22,14 +23,43 @@ VALID_STATES = {
 
 
 class BehaviorManager:
-    def __init__(self, rules=None, cooldowns=None, logger=None):
+    def __init__(
+        self,
+        rules=None,
+        cooldowns=None,
+        logger=None,
+        arbitrator=None,
+    ):
         self.rules = rules or BehaviorRules()
         self.cooldowns = cooldowns or CooldownTracker()
+        self.arbitrator = arbitrator or BehaviorArbitrator()
         self.logger = logger
         self.state = "idle"
         self._pending_event = None
         self._cooldown_until = 0.0
         self._player_present = False
+
+    def arbitrate(
+        self,
+        perception=None,
+        relationship_behavior=None,
+        emotion_state=None,
+        conversation_active=False,
+        personality=None,
+        event_type=None,
+        now=None,
+    ):
+        """把只读运行时上下文交给仲裁层；不执行 Unity 动作。"""
+        return self.arbitrator.select(
+            perception=perception,
+            relationship_behavior=relationship_behavior,
+            emotion_state=emotion_state,
+            conversation_active=conversation_active,
+            personality=personality,
+            behavior_state=self.state,
+            event_type=event_type,
+            now=now,
+        )
 
     def observe_player(self, person_detected):
         self._player_present = bool(person_detected)
